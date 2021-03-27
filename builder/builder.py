@@ -65,13 +65,21 @@ class Builder:
             "godot.tar.gz": "godot.tar.gz",
         })
         cmd += mount(config.mounts)
-        full_cmd = cmd + ["%s:%s" % (config.image, config.image_version)] + config.args
+        if config.out_dir is not None:
+            out_dir = f"out/{config.out_dir}"
+            self.ensure_dir(out_dir)
+            cmd += mount({
+                out_dir: "out"
+            })
+
+        cmd += ["%s:%s" % (config.image, config.image_version)] + config.args
+
         if config.log and not 'log' in kwargs:
             self.ensure_dir("out/logs")
             with open(os.path.join(self.base_dir, "out", "logs", config.log), "w") as log:
-                return run(full_cmd, log=log, **kwargs)
+                return run(cmd, log=log, **kwargs)
         else:
-            return run(full_cmd, **kwargs)
+            return run(cmd, **kwargs)
 
     def git(self, *args):
         return run(["git"] + list(args))

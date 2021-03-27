@@ -5,8 +5,9 @@ class ImageConfig:
         try:
             return self.__class__.getattr(name)
         except AttributeError as e:
-            return ImageConfig.getattr(name)
+            return super().getattr(name)
 
+    out_dir = None
     dirs = ["out"]
     args = ["bash", "/root/build/build.sh"]
     mounts = {}
@@ -22,6 +23,7 @@ class MonoGlueConfig(ImageConfig):
 
 
 class WindowsConfig(ImageConfig):
+    out_dir = "windows"
     dirs = ["out/windows"]
     mounts = {"build-windows": "build"}
     image = "localhost/godot-windows"
@@ -29,6 +31,7 @@ class WindowsConfig(ImageConfig):
 
 
 class JavaScriptConfig(ImageConfig):
+    out_dir = "javascript"
     dirs = ["out/javascript"]
     mounts = {"build-javascript": "build"}
     image = "localhost/godot-javascript"
