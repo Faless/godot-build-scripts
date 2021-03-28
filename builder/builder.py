@@ -44,12 +44,9 @@ class PodmanRunner(Runner):
     IMAGES = ["mono-glue", "windows", "ubuntu-64", "ubuntu-32", "javascript"]
     IMAGES_PRIVATE = ["macosx", "android", "ios", "uwp"]
 
-    def __init__(self, base_dir, registry=None, username=None, password=None, dry_run=False):
+    def __init__(self, base_dir, dry_run=False):
         self.base_dir = base_dir
         self.dry_run = dry_run
-        self.registry = registry
-        self.username = username
-        self.password = password
         self._podman = self._detect_podman()
 
     def _detect_podman(self):
@@ -64,8 +61,7 @@ class PodmanRunner(Runner):
     def image_exists(self, image):
         return run_simple([self._podman, "image", "exists", image]).returncode == 0
 
-    def fetch_image(self, image, force=False):
-        registry = self.registry
+    def fetch_image(self, image, registry=None, username=None, password=None, force=False):
         exists = not force and self.image_exists(image)
         if not exists:
             if registry is None:
@@ -73,12 +69,11 @@ class PodmanRunner(Runner):
                 sys.exit(1)
             self.run([self._podman, "pull", "%s/%s" % (registry, image)])
 
-    def fetch_images(self, force=False):
-        # TODO selective
+    def fetch_images(self, **kwargs):
         for image in PodmanRunner.IMAGES:
-            self.fetch_image("godot/%s" % image, force=force)
+            self.fetch_image("godot/%s" % image, **kwargs)
         for image in PodmanRunner.IMAGES_PRIVATE:
-            self.fetch_image("godot-private/%s" % image, force=force)
+            self.fetch_image("godot-private/%s" % image, **kwargs)
 
     def podrun(self, config, classical=False, mono=False, **kwargs):
         def env(env_vars):
