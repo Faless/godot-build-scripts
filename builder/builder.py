@@ -25,7 +25,7 @@ def ensure_dir(dirname):
 
 class Runner:
 
-    def run(self, cmd, **kwargs):
+    def run(self, cmd, can_fail=False, **kwargs):
         if getattr(self, 'dry_run', False):
             logging.debug("Dry run: %s" % cmd)
             return
@@ -33,7 +33,11 @@ class Runner:
             kwargs['lock'] = True
         if not 'verbose' in kwargs:
             kwargs['verbose'] = True
-        return _run(cmd, **kwargs)
+        res = _run(cmd, **kwargs)
+        if not can_fail and kwargs['lock'] and res[2] != 0:
+            print("Command failed %s" % cmd)
+            sys.exit(1)
+        return res
 
 
 class PodmanRunner(Runner):
@@ -126,8 +130,8 @@ class GitRunner(Runner):
         self.dry_run = dry_run
         self.base_dir = base_dir
 
-    def git(self, *args):
-        return self.run(["git"] + list(args))
+    def git(self, *args, can_fail=False):
+        return self.run(["git"] + list(args), can_fail)
 
     def check_version(self, godot_version):
         import importlib.util
@@ -148,7 +152,7 @@ class GitRunner(Runner):
         repo = "https://github.com/godotengine/godot"
         dest = os.path.join(self.base_dir, "git")
         # TODO error handling, prompt for reset.
-        self.git("clone", dest)
+        self.git("clone", dest, can_fail=True)
         self.git("-C", dest, "fetch", "--all")
         self.git("-C", dest, "checkout", "--detach", ref)
 
