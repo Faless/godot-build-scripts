@@ -4,27 +4,49 @@ import sys
 import os
 
 from .runner import RunError, run as _run
+import subprocess
+import logging
 
-def run(cmd, **kwargs):
-    if not 'lock' in kwargs:
-        kwargs['lock'] = True
-    if not 'verbose' in kwargs:
-        kwargs['verbose'] = True
-    return _run(cmd, **kwargs)
+
+def run_simple(cmd):
+    logging.debug("Running command: %s" % cmd)
+    res = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
+    logging.debug(res.stdout.strip())
+    return res
+
 
 def which(what):
-    return run(["which", what])[0].strip()
+    return run_simple(["which", what]).stdout.strip()
 
 
-class Builder:
+def ensure_dir(dirname):
+    os.makedirs(dirname, exist_ok=True)
+
+
+class Runner:
+
+    def run(self, cmd, **kwargs):
+        if getattr(self, 'dry_run', False):
+            logging.debug("Dry run: %s" % cmd)
+            return
+        if not 'lock' in kwargs:
+            kwargs['lock'] = True
+        if not 'verbose' in kwargs:
+            kwargs['verbose'] = True
+        return _run(cmd, **kwargs)
+
+
+class PodmanRunner(Runner):
     IMAGES = ["mono-glue", "windows", "ubuntu-64", "ubuntu-32", "javascript"]
     IMAGES_PRIVATE = ["macosx", "android", "ios", "uwp"]
 
-    def __init__(self, base_dir, args):
+    def __init__(self, base_dir, registry=None, username=None, password=None, dry_run=False):
         self.base_dir = base_dir
-        self.args = args
+        self.dry_run = dry_run
+        self.registry = registry
+        self.username = username
+        self.password = password
         self._podman = self._detect_podman()
-        self.build_name = os.environ.get('BUILD_NAME', "custom_build")
 
     def _detect_podman(self):
         podman = which("podman")
@@ -35,10 +57,26 @@ class Builder:
             sys.exit(1)
         return podman
 
-    def podman(self, args, **kwargs):
-        return run([self._podman] + args, **kwargs)
+    def image_exists(self, image):
+        return run_simple([self._podman, "image", "exists", image]).returncode == 0
 
-    def podman_run(self, config, **kwargs):
+    def fetch_image(self, image, force=False):
+        registry = self.registry
+        exists = not force and self.image_exists(image)
+        if not exists:
+            if registry is None:
+                print("Can't fetch from None repository, try --skip-download")
+                sys.exit(1)
+            self.run([self._podman, "pull", "%s/%s" % (registry, image)])
+
+    def fetch_images(self, force=False):
+        # TODO selective
+        for image in PodmanRunner.IMAGES:
+            self.fetch_image("godot/%s" % image, force=force)
+        for image in PodmanRunner.IMAGES_PRIVATE:
+            self.fetch_image("godot-private/%s" % image, force=force)
+
+    def podrun(self, config, classical=False, mono=False, **kwargs):
         def env(env_vars):
             for k, v in env_vars.items():
                 yield("--env")
@@ -50,15 +88,15 @@ class Builder:
                 yield(f"{self.base_dir}/{k}:/root/{v}")
 
         for d in config.dirs:
-            self.ensure_dir(os.path.join(self.base_dir, d))
+            ensure_dir(os.path.join(self.base_dir, d))
 
         cores = os.environ.get('NUM_CORES', os.cpu_count())
         cmd = [self._podman, "run", "--rm", "-w", "/root/"]
         cmd += env({
             "BUILD_NAME": os.environ.get("BUILD_NAME", "custom_build"),
             "NUM_CORES": os.environ.get("NUM_CORES", os.cpu_count()),
-            "CLASSICAL": 0,
-            "MONO": 1, # TODO
+            "CLASSICAL": 1 if classical else 0,
+            "MONO": 1 if mono else 0,
         })
         cmd += mount({
             "mono-glue": "mono-glue",
@@ -67,7 +105,7 @@ class Builder:
         cmd += mount(config.mounts)
         if config.out_dir is not None:
             out_dir = f"out/{config.out_dir}"
-            self.ensure_dir(out_dir)
+            ensure_dir(f"{self.base_dir}/{out_dir}")
             cmd += mount({
                 out_dir: "out"
             })
@@ -75,30 +113,21 @@ class Builder:
         cmd += ["%s:%s" % (config.image, config.image_version)] + config.args
 
         if config.log and not 'log' in kwargs:
-            self.ensure_dir("out/logs")
+            ensure_dir(f"{self.base_dir}/out/logs")
             with open(os.path.join(self.base_dir, "out", "logs", config.log), "w") as log:
-                return run(cmd, log=log, **kwargs)
+                return self.run(cmd, log=log, **kwargs)
         else:
-            return run(cmd, **kwargs)
+            return self.run(cmd, **kwargs)
+
+
+class GitRunner(Runner):
+
+    def __init__(self, base_dir, dry_run=False):
+        self.dry_run = dry_run
+        self.base_dir = base_dir
 
     def git(self, *args):
-        return run(["git"] + list(args))
-
-    def fetch_image(self, registry, image, force=False):
-        # TODO for real, and handle failures
-        exists = not force and self.podman(["image", "exists", image])[2] == 0
-        if not exists:
-            #run([podman, "pull", "%s/%s" % (registry, image)])
-            print(exists)
-
-    def fetch_images(self):
-        registry = self.args.registry
-        force = self.args.force_download
-        # TODO selective
-        for image in Builder.IMAGES:
-            self.fetch_image(registry, "godot/%s" % image)
-        for image in Builder.IMAGES_PRIVATE:
-            self.fetch_image(registry, "godot-private/%s" % image)
+        return self.run(["git"] + list(args))
 
     def check_version(self, godot_version):
         import importlib.util
@@ -122,9 +151,6 @@ class Builder:
         self.git("clone", dest)
         self.git("-C", dest, "fetch", "--all")
         self.git("-C", dest, "checkout", "--detach", ref)
-
-    def ensure_dir(self, dirname):
-        os.makedirs(dirname, exist_ok=True)
 
     def tgz(self, version, ref="HEAD"):
         source = os.path.join(self.base_dir, "git")

@@ -5,7 +5,7 @@ class ImageConfig:
         try:
             return self.__class__.getattr(name)
         except AttributeError as e:
-            return super().getattr(name)
+            return super().__getattr__(name)
 
     out_dir = None
     dirs = ["out"]
