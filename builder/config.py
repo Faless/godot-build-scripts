@@ -54,11 +54,20 @@ class Config:
     apple_id_password = ""
 
 
+def write_config(stream):
+    config = {}
+    for k in dir(Config):
+        if k.startswith("_"):
+            continue
+        config[k] = getattr(Config, k)
+    json.dump(config, stream, indent=4, sort_keys=True)
+
+
 try:
     with open(os.path.join(os.getcwd(), 'config.json'), 'r') as f:
         d = json.load(f)
         for k,v in d.items():
-            if hasattr(Config, k):
+            if not k.startswith("_") and hasattr(Config, k):
                 setattr(Config, k, v)
 except:
     # No config specified

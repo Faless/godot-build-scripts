@@ -1,7 +1,28 @@
-import logging, os
+import logging, os, sys
 from argparse import ArgumentParser
 
-from . import Config, ImageConfigs, GitRunner, PodmanRunner
+from . import Config, ImageConfigs, GitRunner, PodmanRunner, write_config
+
+class ConfigCLI:
+    ACTION = "config"
+    HELP = "Print or save config file"
+
+    @staticmethod
+    def execute(base_dir, args):
+        write_config(sys.stdout)
+        sys.stdout.write('\n')
+        if args.save is not None:
+            path = args.save if os.path.isabs(args.save) else os.path.join(base_dir, args.save)
+            if not path.endswith(".json"):
+                print("Invalid config file: %s, must be '.json'" % args.save)
+                sys.exit(1)
+            with open(path, 'w') as w:
+                write_config(w)
+                print("Saved to file: %s" % path)
+
+    @staticmethod
+    def bind(parser):
+        parser.add_argument("-s", "--save")
 
 class ImageCLI:
     ACTION = "fetch"
@@ -121,6 +142,7 @@ class CLI:
         for k,v in CLI.OPTS:
             self.parser.add_argument("--%s" % k)
         self.subparsers = self.parser.add_subparsers(dest="action", help="The requested action", required=True)
+        self.add_command(ConfigCLI)
         self.add_command(GitCLI)
         self.add_command(ImageCLI)
         self.add_command(RunCLI)
