@@ -6,14 +6,7 @@ import subprocess
 import sys
 
 from .config import Config
-from .runner import RunError, run as _run
-
-
-def run_simple(cmd):
-    logging.debug("Running command: %s" % cmd)
-    res = subprocess.run(cmd, stdout=subprocess.PIPE, text=True)
-    logging.debug(res.stdout.strip())
-    return res
+from .runner import RunError, Runner, run_simple
 
 
 def which(what):
@@ -22,23 +15,6 @@ def which(what):
 
 def ensure_dir(dirname):
     os.makedirs(dirname, exist_ok=True)
-
-
-class Runner:
-
-    def run(self, cmd, can_fail=False, **kwargs):
-        if getattr(self, 'dry_run', False):
-            logging.debug("Dry run: %s" % cmd)
-            return
-        if not 'lock' in kwargs:
-            kwargs['lock'] = True
-        if not 'verbose' in kwargs:
-            kwargs['verbose'] = True
-        res = _run(cmd, **kwargs)
-        if not can_fail and kwargs['lock'] and res[2] != 0:
-            print("Command failed %s" % cmd)
-            sys.exit(1)
-        return res
 
 
 class PodmanRunner(Runner):
@@ -157,6 +133,9 @@ class GitRunner(Runner):
         return self.run(["git"] + list(args), can_fail)
 
     def check_version(self, godot_version):
+        if self.dry_run:
+            print("Skipping version check in dry run mode (would likely fail)")
+            return
         import importlib.util
         version_file = os.path.join("git", "version.py")
         spec = importlib.util.spec_from_file_location("version", version_file)

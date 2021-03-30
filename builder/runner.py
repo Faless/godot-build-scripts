@@ -1,6 +1,6 @@
 import sys
 import time
-from subprocess import PIPE, Popen
+from subprocess import PIPE, Popen, run as run_native
 from threading  import Thread
 import logging
 
@@ -103,3 +103,27 @@ def run(cmd, lock=False, log=None, errlog=None, message="", verbose=False):
         logging.debug("Try running: %s" % " ".join(cmd))
 
     return (out, err, proc.returncode)
+
+
+class Runner:
+
+    def run(self, cmd, can_fail=False, **kwargs):
+        if getattr(self, 'dry_run', False):
+            logging.debug("Dry run: %s" % cmd)
+            return
+        if not 'lock' in kwargs:
+            kwargs['lock'] = True
+        if not 'verbose' in kwargs:
+            kwargs['verbose'] = True
+        res = run(cmd, **kwargs)
+        if not can_fail and kwargs['lock'] and res[2] != 0:
+            print("Command failed %s" % cmd)
+            sys.exit(1)
+        return res
+
+def run_simple(cmd):
+    logging.debug("Running command: %s" % cmd)
+    res = run_native(cmd, stdout=PIPE, stderr=PIPE, text=True)
+    logging.debug(res.stdout.strip())
+    logging.debug(res.stderr.strip())
+    return res
