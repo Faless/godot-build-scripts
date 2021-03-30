@@ -92,6 +92,9 @@ class PodmanRunner(Runner):
             if image in PodmanRunner.IMAGES:
                 self.fetch_image("godot/%s" % image, **kwargs)
             elif image in PodmanRunner.IMAGES_PRIVATE:
+                if not self.logged_in:
+                    print("Can't fetch image: %s. Not logged in" % image)
+                    continue
                 self.fetch_image("godot-private/%s" % image, **kwargs)
 
     def podrun(self, config, classical=False, mono=False, **kwargs):
