@@ -64,7 +64,7 @@ class RunCLI(BaseCLI):
             args.container = containers
         to_build = [ImageConfigs[containers.index(c)] for c in args.container]
         for b in to_build:
-            podman.podrun(b, classical=build_classical, mono=build_mono, local=not args.remote)
+            podman.podrun(b, classical=build_classical, mono=build_mono, local=not args.remote, interactive=args.interactive)
 
     def __init__(self, base):
         containers = [cls.__name__.replace("Config", "") for cls in ImageConfigs]
@@ -72,6 +72,7 @@ class RunCLI(BaseCLI):
         self.parser.add_argument("-b", "--build", choices=["all", "classical", "mono"], default="all")
         self.parser.add_argument("-k", "--container", action="append", default=[], help="The containers to build, one of %s" % containers)
         self.parser.add_argument("-r", "--remote", help="Run with remote containers", action="store_true")
+        self.parser.add_argument("-i", "--interactive", action="store_true", help="Enter an interactive shell inside the container instead o running the default command")
 
 
 class ReleaseCLI(BaseCLI):

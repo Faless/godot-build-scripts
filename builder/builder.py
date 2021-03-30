@@ -96,7 +96,7 @@ class PodmanRunner(Runner):
                     continue
                 self.fetch_image("%s/%s" % (Config.private_path, image), **kwargs)
 
-    def podrun(self, run_config, classical=False, mono=False, local=False, **kwargs):
+    def podrun(self, run_config, classical=False, mono=False, local=False, interactive=False, **kwargs):
         def env(env_vars):
             for k, v in env_vars.items():
                 yield("--env")
@@ -129,10 +129,16 @@ class PodmanRunner(Runner):
             cmd += mount({
                 out_dir: "out"
             })
+        cmd += run_config.extra_opts
 
         image_path = self.get_image_path(run_config.image, version=run_config.image_version, local=local)
-        cmd += run_config.extra_opts + [image_path, "--"] + run_config.cmd
+        if interactive:
+            if self.dry_run:
+                print(" ".join(cmd + ["-it", image_path, "bash"]))
+                return
+            return subprocess.run(cmd + ["-it", image_path, "bash"])
 
+        cmd += [image_path] + run_config.cmd
         if run_config.log and not 'log' in kwargs:
             ensure_dir(f"{self.base_dir}/out/logs")
             with open(os.path.join(self.base_dir, "out", "logs", run_config.log), "w") as log:
