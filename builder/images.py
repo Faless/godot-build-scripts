@@ -15,6 +15,12 @@ class ImageConfig:
     log = None
 
 
+class AOTCompilersConfig:
+    out_dir = "aot-compilers"
+    image = "localhost/godot-ios"
+    args = ["bash", "-c", "'cp -r /root/aot-compilers/* /root/out'"]
+
+
 class MonoGlueConfig(ImageConfig):
     dirs = ["mono-glue"]
     mounts = {"build-mono-glue": "build"}
@@ -24,17 +30,64 @@ class MonoGlueConfig(ImageConfig):
 
 class WindowsConfig(ImageConfig):
     out_dir = "windows"
-    dirs = ["out/windows"]
     mounts = {"build-windows": "build"}
     image = "localhost/godot-windows"
     log = "windows"
 
 
+class Linux64Config(ImageConfig):
+    out_dir = "linux/x64"
+    mounts = {"build-linux": "build"}
+    image = "localhost/godot-ubuntu-64"
+    log = "linux64"
+
+class Linux32Config(ImageConfig):
+    out_dir = "linux/x86"
+    mounts = {"build-linux": "build"}
+    image = "localhost/godot-ubuntu-32"
+    log = "linux32"
+
+
 class JavaScriptConfig(ImageConfig):
     out_dir = "javascript"
-    dirs = ["out/javascript"]
     mounts = {"build-javascript": "build"}
     image = "localhost/godot-javascript"
     log = "javascript"
+
+
+class MacOSXConfig(ImageConfig):
+    out_dir = "macosx"
+    mounts = {"build-macosx": "build"}
+    image = "localhost/godot-osx"
+    log = "macosx"
+
+
+class AndroidConfig(ImageConfig):
+    out_dir = "android"
+    mounts = {"build-android", "build"}
+    image = "localhost/godot-android"
+    log = "android"
+
+
+class IOSConfig(ImageConfig):
+    out_dir = "ios"
+    mounts = {"build-ios", "build"}
+    image = "localhost/godot-ios"
+    log = "ios"
+
+
+class ServerConfig(ImageConfig):
+    out_dir = "server/x64"
+    mounts = {"build-server", "build"}
+    image = "localhost/godot-ubuntu-64"
+    log = "server"
+
+
+class UWPConfig(ImageConfig):
+    out_dir = "uwp"
+    args = ["--ulimit", "nofile=32768:32768", "bash", "/root/build/build.sh"]
+    image = "localhost/uwp"
+    log = "uwp"
+
 
 configs = ImageConfig.__subclasses__()

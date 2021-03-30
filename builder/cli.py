@@ -42,6 +42,8 @@ class GitCLI(BaseCLI):
             git.checkout(args.treeish)
         if not args.skip_tar:
             git.tgz(args.godot_version)
+        if not args.skip_check:
+            git.check_version(args.godot_version)
 
     def __init__(self, base):
         self.make_parser(base, "checkout", help="git checkout, reset, version check, tar")
@@ -49,6 +51,7 @@ class GitCLI(BaseCLI):
         self.parser.add_argument("-g", "--treeish", help="git treeish, possibly a git ref, or commit hash.", default="origin/master")
         self.parser.add_argument("-c", "--skip-checkout", action="store_true")
         self.parser.add_argument("-t", "--skip-tar", action="store_true")
+        self.parser.add_argument("--skip-check", action="store_true")
 
 
 class RunCLI(BaseCLI):
