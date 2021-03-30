@@ -63,12 +63,15 @@ def write_config(stream):
     json.dump(config, stream, indent=4, sort_keys=True)
 
 
-try:
-    with open(os.path.join(os.getcwd(), 'config.json'), 'r') as f:
+def load_config(path):
+    with open(path, 'r') as f:
         d = json.load(f)
         for k,v in d.items():
             if not k.startswith("_") and hasattr(Config, k):
                 setattr(Config, k, v)
+
+try:
+    load_config(os.path.join(os.getcwd(), 'config.json'))
 except:
-    # No config specified
+    # No default config
     pass

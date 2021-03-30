@@ -1,7 +1,7 @@
 import logging, os, sys
 from argparse import ArgumentParser
 
-from . import Config, ImageConfigs, GitRunner, PodmanRunner, write_config
+from . import Config, ImageConfigs, GitRunner, PodmanRunner, write_config, load_config
 
 class ConfigCLI:
     ACTION = "config"
@@ -141,6 +141,7 @@ class CLI:
         self.parser = ArgumentParser()
         for k,v in CLI.OPTS:
             self.parser.add_argument("--%s" % k)
+        self.parser.add_argument("-c", "--config", help="Configuration override")
         self.subparsers = self.parser.add_subparsers(dest="action", help="The requested action", required=True)
         self.add_command(ConfigCLI)
         self.add_command(GitCLI)
@@ -150,6 +151,12 @@ class CLI:
 
     def execute(self):
         args = self.parser.parse_args()
+        if args.config is not None:
+            path = args.config if os.path.isabs(args.config) else os.path.join(self.base_dir, args.config)
+            if not os.path.isfile(path):
+                print("Invalid config file: %s" % path)
+                sys.exit(1)
+            load_config(path)
         for k,v in CLI.OPTS:
             override = getattr(args, k)
             if override is not None:
