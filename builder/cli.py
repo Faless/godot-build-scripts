@@ -3,15 +3,9 @@ from argparse import ArgumentParser
 
 from . import Config, ImageConfigs, GitRunner, PodmanRunner
 
-class BaseCLI:
-
-    def make_parser(self, base, *args, **kwargs):
-        self.parser = base.add_parser(*args, **kwargs)
-        self.parser.add_argument("-n", "--dry-run", action="store_true")
-        self.parser.set_defaults(action_func=self.__class__.execute)
-
-
-class ImageCLI(BaseCLI):
+class ImageCLI:
+    ACTION = "fetch"
+    HELP = "Fetch remote build containers"
 
     @staticmethod
     def execute(base_dir, args):
@@ -25,13 +19,15 @@ class ImageCLI(BaseCLI):
             force=args.force_download
         )
 
-    def __init__(self, base):
-        self.make_parser(base, "fetch", help="Fetch remote build containers")
-        self.parser.add_argument("-f", "--force-download", action="store_true")
-        self.parser.add_argument("-i", "--image", action="append", default=[], help="The image to fetch, all by default. Possible values: %s" % ", ".join(PodmanRunner.get_images()))
+    @staticmethod
+    def bind(parser):
+        parser.add_argument("-f", "--force-download", action="store_true")
+        parser.add_argument("-i", "--image", action="append", default=[], help="The image to fetch, all by default. Possible values: %s" % ", ".join(PodmanRunner.get_images()))
 
 
-class GitCLI(BaseCLI):
+class GitCLI:
+    ACTION = "checkout"
+    HELP = "git checkout, version check, tar"
 
     @staticmethod
     def execute(base_dir, args):
@@ -43,39 +39,42 @@ class GitCLI(BaseCLI):
         if not args.skip_tar:
             git.tgz(args.godot_version)
 
-    def __init__(self, base):
-        self.make_parser(base, "checkout", help="git checkout, version check, tar")
-        self.parser.add_argument("treeish", help="git treeish, possibly a git ref, or commit hash.", default="origin/master")
-        self.parser.add_argument("godot_version", help="godot version (e.g. 3.1-alpha5)")
-        self.parser.add_argument("-c", "--skip-checkout", action="store_true")
-        self.parser.add_argument("-t", "--skip-tar", action="store_true")
-        self.parser.add_argument("--skip-check", action="store_true")
+    @staticmethod
+    def bind(parser):
+        parser.add_argument("treeish", help="git treeish, possibly a git ref, or commit hash.", default="origin/master")
+        parser.add_argument("godot_version", help="godot version (e.g. 3.1-alpha5)")
+        parser.add_argument("-c", "--skip-checkout", action="store_true")
+        parser.add_argument("-t", "--skip-tar", action="store_true")
+        parser.add_argument("--skip-check", action="store_true")
 
 
-class RunCLI(BaseCLI):
+class RunCLI:
+    ACTION = "run"
+    HELP = "Run the desired containers"
+
+    CONTAINERS = [cls.__name__.replace("Config", "") for cls in ImageConfigs]
 
     @staticmethod
     def execute(base_dir, args):
-        containers = [cls.__name__.replace("Config", "") for cls in ImageConfigs]
         podman = PodmanRunner(base_dir, dry_run=args.dry_run)
         build_mono = args.build == "all" or args.build == "mono"
         build_classical = args.build == "all" or args.build == "classical"
         if len(args.container) == 0:
-            args.container = containers
-        to_build = [ImageConfigs[containers.index(c)] for c in args.container]
+            args.container = RunCLI.CONTAINERS
+        to_build = [ImageConfigs[RunCLI.CONTAINERS.index(c)] for c in args.container]
         for b in to_build:
             podman.podrun(b, classical=build_classical, mono=build_mono, local=not args.remote, interactive=args.interactive)
 
-    def __init__(self, base):
-        containers = [cls.__name__.replace("Config", "") for cls in ImageConfigs]
-        self.make_parser(base, "run", help="Run the desired containers")
-        self.parser.add_argument("-b", "--build", choices=["all", "classical", "mono"], default="all")
-        self.parser.add_argument("-k", "--container", action="append", default=[], help="The containers to build, one of %s" % containers)
-        self.parser.add_argument("-r", "--remote", help="Run with remote containers", action="store_true")
-        self.parser.add_argument("-i", "--interactive", action="store_true", help="Enter an interactive shell inside the container instead o running the default command")
+    def bind(parser):
+        parser.add_argument("-b", "--build", choices=["all", "classical", "mono"], default="all")
+        parser.add_argument("-k", "--container", action="append", default=[], help="The containers to build, one of %s" % RunCLI.CONTAINERS)
+        parser.add_argument("-r", "--remote", help="Run with remote containers", action="store_true")
+        parser.add_argument("-i", "--interactive", action="store_true", help="Enter an interactive shell inside the container instead of running the default command")
 
 
-class ReleaseCLI(BaseCLI):
+class ReleaseCLI:
+    ACTION = "release"
+    HELP = "Make a full release cycle, git checkout, reset, version check, tar, build all"
 
     @staticmethod
     def execute(base_dir, args):
@@ -96,32 +95,36 @@ class ReleaseCLI(BaseCLI):
         for b in ImageConfigs:
             podman.podrun(b, classical=build_classical, mono=build_mono, local=args.localhost)
 
-    def __init__(self, base):
-        self.make_parser(base, "release", help="Make a full release cycle, git checkout, reset, version check, tar, build all")
-        self.parser.add_argument("godot_version", help="godot version (e.g. 3.1-alpha5)")
-        self.parser.add_argument("-b", "--build", choices=["all", "classical", "mono"], default="all")
-        self.parser.add_argument("-s", "--skip-download", action="store_true")
-        self.parser.add_argument("-c", "--skip-git", action="store_true")
-        self.parser.add_argument("-g", "--git", help="git treeish, possibly a git ref, or commit hash.", default="origin/master")
-        self.parser.add_argument("-f", "--force-download", action="store_true")
-        self.parser.add_argument("-l", "--localhost", action="store_true")
+    @staticmethod
+    def bind(parser):
+        parser.add_argument("godot_version", help="godot version (e.g. 3.1-alpha5)")
+        parser.add_argument("-b", "--build", choices=["all", "classical", "mono"], default="all")
+        parser.add_argument("-s", "--skip-download", action="store_true")
+        parser.add_argument("-c", "--skip-git", action="store_true")
+        parser.add_argument("-g", "--git", help="git treeish, possibly a git ref, or commit hash.", default="origin/master")
+        parser.add_argument("-f", "--force-download", action="store_true")
+        parser.add_argument("-l", "--localhost", action="store_true")
 
 
 class CLI:
     OPTS = [(v, getattr(Config, v)) for v in dir(Config) if not v.startswith("_")]
+
+    def add_command(self, cli):
+        parser = self.subparsers.add_parser(cli.ACTION, help=cli.HELP)
+        parser.add_argument("-n", "--dry-run", action="store_true")
+        parser.set_defaults(action_func=cli.execute)
+        cli.bind(parser)
 
     def __init__(self, base_dir):
         self.base_dir = base_dir
         self.parser = ArgumentParser()
         for k,v in CLI.OPTS:
             self.parser.add_argument("--%s" % k)
-        subparsers = self.parser.add_subparsers(dest="action", help="The requested action", required=True)
-        self.clis = [
-            ImageCLI(subparsers),
-            GitCLI(subparsers),
-            RunCLI(subparsers),
-            ReleaseCLI(subparsers),
-        ]
+        self.subparsers = self.parser.add_subparsers(dest="action", help="The requested action", required=True)
+        self.add_command(GitCLI)
+        self.add_command(ImageCLI)
+        self.add_command(RunCLI)
+        self.add_command(ReleaseCLI)
 
     def execute(self):
         args = self.parser.parse_args()
