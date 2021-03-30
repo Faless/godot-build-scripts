@@ -49,6 +49,12 @@ class PodmanRunner(Runner):
     def get_images():
         return PodmanRunner.IMAGES + PodmanRunner.IMAGES_PRIVATE
 
+    def get_image_path(self, image, version="latest", local=False):
+        if local:
+            return f"localhost/{image}:{version}"
+        path = Config.private_path if image in PodmanRunner.IMAGES_PRIVATE else Config.public_path
+        return f"{Config.registry}/{path}/{image}:{version}"
+
     def __init__(self, base_dir, dry_run=False):
         self.base_dir = base_dir
         self.dry_run = dry_run
@@ -64,40 +70,33 @@ class PodmanRunner(Runner):
             sys.exit(1)
         return podman
 
-    def login(self, registry, username, password):
-        if registry is None:
-            registry = Config.registry
-        if username is None or password is None:
+    def login(self):
+        if Config.username == "" or Config.password == "":
             logging.debug("Skipping login, missing username or password")
             return
-        self.logged_in = run_simple(self._podman, "login", regitry, "-u", username, "-p", password).returncode == 0
+        self.logged_in = run_simple(self._podman, "login", Config.regitry, "-u", Config.username, "-p", Config.password).returncode == 0
 
     def image_exists(self, image):
         return run_simple([self._podman, "image", "exists", image]).returncode == 0
 
-    def fetch_image(self, image, registry=None, force=False):
+    def fetch_image(self, image, force=False):
         exists = not force and self.image_exists(image)
-        if registry is None:
-            registry = Config.registry
         if not exists:
-            if registry is None:
-                print("Can't fetch from None repository, try --skip-download")
-                sys.exit(1)
-            self.run([self._podman, "pull", "%s/%s" % (registry, image)])
+            self.run([self._podman, "pull", "%s/%s" % (Config.registry, image)])
 
     def fetch_images(self, images=[], **kwargs):
         if len(images) == 0:
             images = PodmanRunner.get_images()
         for image in images:
             if image in PodmanRunner.IMAGES:
-                self.fetch_image("godot/%s" % image, **kwargs)
+                self.fetch_image("%s/%s" % (Config.public_path, image), **kwargs)
             elif image in PodmanRunner.IMAGES_PRIVATE:
                 if not self.logged_in:
                     print("Can't fetch image: %s. Not logged in" % image)
                     continue
-                self.fetch_image("godot-private/%s" % image, **kwargs)
+                self.fetch_image("%s/%s" % (Config.private_path, image), **kwargs)
 
-    def podrun(self, config, classical=False, mono=False, **kwargs):
+    def podrun(self, run_config, classical=False, mono=False, local=False, **kwargs):
         def env(env_vars):
             for k, v in env_vars.items():
                 yield("--env")
@@ -108,7 +107,7 @@ class PodmanRunner(Runner):
                 yield("-v")
                 yield(f"{self.base_dir}/{k}:/root/{v}")
 
-        for d in config.dirs:
+        for d in run_config.dirs:
             ensure_dir(os.path.join(self.base_dir, d))
 
         cores = os.environ.get('NUM_CORES', os.cpu_count())
@@ -123,19 +122,20 @@ class PodmanRunner(Runner):
             "mono-glue": "mono-glue",
             "godot.tar.gz": "godot.tar.gz",
         })
-        cmd += mount(config.mounts)
-        if config.out_dir is not None:
-            out_dir = f"out/{config.out_dir}"
+        cmd += mount(run_config.mounts)
+        if run_config.out_dir is not None:
+            out_dir = f"out/{run_config.out_dir}"
             ensure_dir(f"{self.base_dir}/{out_dir}")
             cmd += mount({
                 out_dir: "out"
             })
 
-        cmd += ["%s:%s" % (config.image, config.image_version)] + config.args
+        image_path = self.get_image_path(run_config.image, version=run_config.image_version, local=local)
+        cmd += [image_path] + run_config.args
 
-        if config.log and not 'log' in kwargs:
+        if run_config.log and not 'log' in kwargs:
             ensure_dir(f"{self.base_dir}/out/logs")
-            with open(os.path.join(self.base_dir, "out", "logs", config.log), "w") as log:
+            with open(os.path.join(self.base_dir, "out", "logs", run_config.log), "w") as log:
                 return self.run(cmd, log=log, **kwargs)
         else:
             return self.run(cmd, **kwargs)
@@ -168,7 +168,6 @@ class GitRunner(Runner):
     def checkout(self, ref):
         repo = "https://github.com/godotengine/godot"
         dest = os.path.join(self.base_dir, "git")
-        # TODO error handling, prompt for reset.
         self.git("clone", dest, can_fail=True)
         self.git("-C", dest, "fetch", "--all")
         self.git("-C", dest, "checkout", "--detach", ref)

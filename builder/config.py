@@ -10,6 +10,18 @@ class Config:
     # https://github.com/godotengine/build-containers
     registry = "registry.prehensile-tales.com"
 
+    # Registry username
+    username = ""
+
+    # Registry password
+    password = ""
+
+    # Public image path
+    public_path = "godot"
+
+    # Private image path
+    private_path = "godot-private"
+
     # Default build name used to distinguish between official and custom builds.
     build_name = "custom_build"
 

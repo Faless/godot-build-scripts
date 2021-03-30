@@ -1,7 +1,7 @@
 import logging, os
 from argparse import ArgumentParser
 
-from . import ImageConfigs, GitRunner, PodmanRunner
+from . import Config, ImageConfigs, GitRunner, PodmanRunner
 
 class BaseCLI:
 
@@ -19,18 +19,14 @@ class ImageCLI(BaseCLI):
             base_dir,
             dry_run=args.dry_run
         )
-        podman.login(args.registry, args.username, args.password)
+        podman.login()
         podman.fetch_images(
             images = args.image,
-            registry=args.registry,
             force=args.force_download
         )
 
     def __init__(self, base):
         self.make_parser(base, "fetch", help="Fetch remote build containers")
-        self.parser.add_argument("-r", "--registry")
-        self.parser.add_argument("-u", "--username")
-        self.parser.add_argument("-p", "--password")
         self.parser.add_argument("-f", "--force-download", action="store_true")
         self.parser.add_argument("-i", "--image", action="append", default=[], help="The image to fetch, all by default. Possible values: %s" % ", ".join(PodmanRunner.get_images()))
 
@@ -86,11 +82,8 @@ class ReleaseCLI(BaseCLI):
         build_mono = args.build == "all" or args.build == "mono"
         build_classical = args.build == "all" or args.build == "classical"
         if not args.skip_download:
-            podman.login(args.registry, args.username, args.password)
+            podman.login()
             podman.fetch_images(
-                registry=args.registry,
-                username=args.username,
-                password=args.password,
                 force=args.force_download
             )
         if not args.skip_git:
@@ -104,9 +97,6 @@ class ReleaseCLI(BaseCLI):
     def __init__(self, base):
         self.make_parser(base, "release", help="Make a full release cycle, git checkout, reset, version check, tar, build all")
         self.parser.add_argument("godot_version", help="godot version (e.g. 3.1-alpha5)")
-        self.parser.add_argument("-r", "--registry")
-        self.parser.add_argument("-u", "--username")
-        self.parser.add_argument("-p", "--password")
         self.parser.add_argument("-b", "--build", choices=["all", "classical", "mono"], default="all")
         self.parser.add_argument("-s", "--skip-download", action="store_true")
         self.parser.add_argument("-c", "--skip-git", action="store_true")
@@ -115,10 +105,13 @@ class ReleaseCLI(BaseCLI):
 
 
 class CLI:
+    OPTS = [(v, getattr(Config, v)) for v in dir(Config) if not v.startswith("_")]
 
     def __init__(self, base_dir):
         self.base_dir = base_dir
         self.parser = ArgumentParser()
+        for k,v in CLI.OPTS:
+            self.parser.add_argument("--%s" % k)
         subparsers = self.parser.add_subparsers(dest="action", help="The requested action", required=True)
         self.clis = [
             ImageCLI(subparsers),
@@ -129,6 +122,10 @@ class CLI:
 
     def execute(self):
         args = self.parser.parse_args()
+        for k,v in CLI.OPTS:
+            override = getattr(args, k)
+            if override is not None:
+                setattr(Config, k, override)
         args.action_func(self.base_dir, args)
 
 
