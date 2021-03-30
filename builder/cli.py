@@ -19,10 +19,10 @@ class ImageCLI(BaseCLI):
             base_dir,
             dry_run=args.dry_run
         )
+        podman.login(args.registry, args.username, args.password)
         podman.fetch_images(
+            images = args.image,
             registry=args.registry,
-            username=args.username,
-            password=args.password,
             force=args.force_download
         )
 
@@ -32,6 +32,7 @@ class ImageCLI(BaseCLI):
         self.parser.add_argument("-u", "--username")
         self.parser.add_argument("-p", "--password")
         self.parser.add_argument("-f", "--force-download", action="store_true")
+        self.parser.add_argument("-i", "--image", action="append", default=[], help="The image to fetch, all by default. Possible values: %s" % ", ".join(PodmanRunner.get_images()))
 
 
 class GitCLI(BaseCLI):
@@ -85,6 +86,7 @@ class ReleaseCLI(BaseCLI):
         build_mono = args.build == "all" or args.build == "mono"
         build_classical = args.build == "all" or args.build == "classical"
         if not args.skip_download:
+            podman.login(args.registry, args.username, args.password)
             podman.fetch_images(
                 registry=args.registry,
                 username=args.username,

@@ -1,11 +1,12 @@
 #!/usr/python
 
-import sys
-import os
-
-from .runner import RunError, run as _run
-import subprocess
 import logging
+import os
+import subprocess
+import sys
+
+from .config import Config
+from .runner import RunError, run as _run
 
 
 def run_simple(cmd):
@@ -44,9 +45,14 @@ class PodmanRunner(Runner):
     IMAGES = ["mono-glue", "windows", "ubuntu-64", "ubuntu-32", "javascript"]
     IMAGES_PRIVATE = ["macosx", "android", "ios", "uwp"]
 
+    @staticmethod
+    def get_images():
+        return PodmanRunner.IMAGES + PodmanRunner.IMAGES_PRIVATE
+
     def __init__(self, base_dir, dry_run=False):
         self.base_dir = base_dir
         self.dry_run = dry_run
+        self.logged_in = False
         self._podman = self._detect_podman()
 
     def _detect_podman(self):
@@ -58,22 +64,35 @@ class PodmanRunner(Runner):
             sys.exit(1)
         return podman
 
+    def login(self, registry, username, password):
+        if registry is None:
+            registry = Config.registry
+        if username is None or password is None:
+            logging.debug("Skipping login, missing username or password")
+            return
+        self.logged_in = run_simple(self._podman, "login", regitry, "-u", username, "-p", password).returncode == 0
+
     def image_exists(self, image):
         return run_simple([self._podman, "image", "exists", image]).returncode == 0
 
-    def fetch_image(self, image, registry=None, username=None, password=None, force=False):
+    def fetch_image(self, image, registry=None, force=False):
         exists = not force and self.image_exists(image)
+        if registry is None:
+            registry = Config.registry
         if not exists:
             if registry is None:
                 print("Can't fetch from None repository, try --skip-download")
                 sys.exit(1)
             self.run([self._podman, "pull", "%s/%s" % (registry, image)])
 
-    def fetch_images(self, **kwargs):
-        for image in PodmanRunner.IMAGES:
-            self.fetch_image("godot/%s" % image, **kwargs)
-        for image in PodmanRunner.IMAGES_PRIVATE:
-            self.fetch_image("godot-private/%s" % image, **kwargs)
+    def fetch_images(self, images=[], **kwargs):
+        if len(images) == 0:
+            images = PodmanRunner.get_images()
+        for image in images:
+            if image in PodmanRunner.IMAGES:
+                self.fetch_image("godot/%s" % image, **kwargs)
+            elif image in PodmanRunner.IMAGES_PRIVATE:
+                self.fetch_image("godot-private/%s" % image, **kwargs)
 
     def podrun(self, config, classical=False, mono=False, **kwargs):
         def env(env_vars):
