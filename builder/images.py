@@ -9,7 +9,8 @@ class ImageConfig:
 
     out_dir = None
     dirs = ["out"]
-    args = ["bash", "/root/build/build.sh"]
+    extra_opts = []
+    cmd = ["bash", "/root/build/build.sh"]
     mounts = {}
     image_version = "3.3-mono-6.12.0.114"
     log = None
@@ -18,7 +19,7 @@ class ImageConfig:
 class AOTCompilersConfig:
     out_dir = "aot-compilers"
     image = "localhost/godot-ios"
-    args = ["bash", "-c", "'cp -r /root/aot-compilers/* /root/out'"]
+    cmd = ["bash", "-c", "'cp -r /root/aot-compilers/* /root/out'"]
 
 
 class MonoGlueConfig(ImageConfig):
@@ -85,7 +86,8 @@ class ServerConfig(ImageConfig):
 
 class UWPConfig(ImageConfig):
     out_dir = "uwp"
-    args = ["--ulimit", "nofile=32768:32768", "bash", "/root/build/build.sh"]
+    extra_opts = ["--ulimit", "nofile=32768:32768"]
+    cmd = ["bash", "/root/build/build.sh"]
     mounts = {"build-uwp": "build"}
     image = "uwp"
     log = "uwp"

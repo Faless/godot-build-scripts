@@ -131,7 +131,7 @@ class PodmanRunner(Runner):
             })
 
         image_path = self.get_image_path(run_config.image, version=run_config.image_version, local=local)
-        cmd += [image_path] + run_config.args
+        cmd += run_config.extra_opts + [image_path, "--"] + run_config.cmd
 
         if run_config.log and not 'log' in kwargs:
             ensure_dir(f"{self.base_dir}/out/logs")

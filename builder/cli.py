@@ -64,13 +64,14 @@ class RunCLI(BaseCLI):
             args.container = containers
         to_build = [ImageConfigs[containers.index(c)] for c in args.container]
         for b in to_build:
-            podman.podrun(b, classical=build_classical, mono=build_mono)
+            podman.podrun(b, classical=build_classical, mono=build_mono, local=not args.remote)
 
     def __init__(self, base):
         containers = [cls.__name__.replace("Config", "") for cls in ImageConfigs]
         self.make_parser(base, "run", help="Run the desired containers")
         self.parser.add_argument("-b", "--build", choices=["all", "classical", "mono"], default="all")
         self.parser.add_argument("-k", "--container", action="append", default=[], help="The containers to build, one of %s" % containers)
+        self.parser.add_argument("-r", "--remote", help="Run with remote containers", action="store_true")
 
 
 class ReleaseCLI(BaseCLI):
@@ -81,7 +82,7 @@ class ReleaseCLI(BaseCLI):
         podman = PodmanRunner(base_dir, dry_run=args.dry_run)
         build_mono = args.build == "all" or args.build == "mono"
         build_classical = args.build == "all" or args.build == "classical"
-        if not args.skip_download:
+        if not args.localhost and not args.skip_download:
             podman.login()
             podman.fetch_images(
                 force=args.force_download
@@ -92,7 +93,7 @@ class ReleaseCLI(BaseCLI):
             git.tgz(args.godot_version)
 
         for b in ImageConfigs:
-            podman.podrun(b, classical=build_classical, mono=build_mono)
+            podman.podrun(b, classical=build_classical, mono=build_mono, local=args.localhost)
 
     def __init__(self, base):
         self.make_parser(base, "release", help="Make a full release cycle, git checkout, reset, version check, tar, build all")
@@ -102,6 +103,7 @@ class ReleaseCLI(BaseCLI):
         self.parser.add_argument("-c", "--skip-git", action="store_true")
         self.parser.add_argument("-g", "--git", help="git treeish, possibly a git ref, or commit hash.", default="origin/master")
         self.parser.add_argument("-f", "--force-download", action="store_true")
+        self.parser.add_argument("-l", "--localhost", action="store_true")
 
 
 class CLI:
