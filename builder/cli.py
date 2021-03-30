@@ -1,3 +1,4 @@
+import logging, os
 from argparse import ArgumentParser
 
 from . import ImageConfigs, GitRunner, PodmanRunner
@@ -127,3 +128,11 @@ class CLI:
     def execute(self):
         args = self.parser.parse_args()
         args.action_func(self.base_dir, args)
+
+
+def main(loglevel=logging.DEBUG):
+    logging.basicConfig(level=loglevel)
+    CLI(os.getcwd()).execute()
+
+if __name__ == "__main__":
+    main()
